@@ -1,0 +1,36 @@
+---
+- name: 'Reconfig MySQL Master to Slave'
+  hosts: all
+  become: true
+
+  tasks:  
+
+    - name: Check if mysqlmaster is reachable
+      wait_for:
+        host: "192.168.10.30"
+        port: 3306
+        timeout: 5
+      ignore_errors: yes
+      register: mysqlmaster_check
+
+    - name: Config Wordpress MySQL Database set
+      block:
+        - name: Config Wordpress for slave
+          lineinfile:
+            path: /usr/share/nginx/html/wp-config.php
+            regexp: "^define\\( 'DB_HOST',.*"
+            line: "define( 'DB_HOST', '192.168.10.35' );"
+      when: 
+        - inventory_hostname == 'nginx'
+        - mysqlmaster_check is failed
+
+    - name: Config Wordpress MySQL Database set
+      block:
+        - name: Config Wordpress for master
+          lineinfile:
+            path: /usr/share/nginx/html/wp-config.php
+            regexp: "^define\\( 'DB_HOST',.*"
+            line: "define( 'DB_HOST', '192.168.10.30' );"
+      when: 
+        - inventory_hostname == 'nginx'
+        - mysqlmaster_check is succeeded
