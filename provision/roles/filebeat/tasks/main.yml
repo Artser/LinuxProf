@@ -1,0 +1,63 @@
+---
+- name: Import packages
+  synchronize:
+    src: "{{ role_path }}/files/packages"
+    dest: /home/centos/
+    mode: push
+
+- name: Find all rpm files in packages folder
+  ansible.builtin.find:
+    paths: "/home/centos/packages"
+    patterns: "*.rpm"
+  register: rpm_files
+
+- name: Setting rpm_list
+  ansible.builtin.set_fact:
+    rpm_list: "{{ rpm_files.files | map(attribute='path') | list}}"
+
+- name: installing the rpm files
+  ansible.builtin.yum:
+    name: "{{ rpm_list }}"
+    state: present
+
+- name: 'Configure Filebeat'
+  copy: 
+    src: files/filebeat.yml 
+    dest: /etc/filebeat/filebeat.yml
+  notify:
+    - restart filebeat
+
+- name: 'Filebeat MySQL'
+  shell: |
+    filebeat modules enable mysql   
+    filebeat setup
+  notify:
+    - restart filebeat 
+  ignore_errors: yes
+  when: inventory_hostname == 'mysqlmaster' or inventory_hostname == 'mysqlslave'  
+
+
+- name: 'Filebeat Nginx'
+  shell: |
+    filebeat modules enable nginx   
+    filebeat setup
+  notify:
+    - restart filebeat    
+  ignore_errors: yes
+  when: inventory_hostname == 'nginx'  
+
+
+- name: Add port to firewalld
+  firewalld:
+    port: "{{ item }}"
+    permanent: yes
+    state: enabled
+  loop:
+    - 5601/tcp
+    - 9200/tcp
+    - 9300/tcp
+
+- name: 'Reload Firewalld'
+  systemd:
+    name: firewalld
+    state: reloaded   

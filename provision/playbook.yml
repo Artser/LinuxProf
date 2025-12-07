@@ -1,0 +1,84 @@
+---
+- name: Configure CentOS repositories on all hosts
+  hosts: all
+  tasks:
+    - name: Apply sed commands to CentOS repos
+      shell: |
+        if [ $(grep -c "ok" apply_fix_repo) -gt 0 ]; then
+            echo Already done!
+            exit
+        fi
+
+        sudo sed -i 's/mirror.centos.org/vault.centos.org/g' /etc/yum.repos.d/CentOS-*.repo
+        sudo sed -i 's/^#.*baseurl=http/baseurl=http/g' /etc/yum.repos.d/CentOS-*.repo
+        sudo sed -i 's/^mirrorlist=http/#mirrorlist=http/g' /etc/yum.repos.d/CentOS-*.repo
+        echo ok > apply_fix_repo
+
+        echo "Done!"
+      register: command_result
+
+    - name: Results
+      debug:
+        msg: "{{ command_result.stdout }}"
+
+    - name: Install rsync
+      become: true
+      ansible.builtin.yum:
+        name: rsync
+        state: present
+
+- hosts: router
+  become: true
+  roles: 
+    - router
+    - zabbix_agent
+    - filebeat
+
+- hosts: backup
+  become: true
+  roles:
+    - linux
+    - nfs_server
+    - zabbix_agent
+    - filebeat      
+
+- hosts: elk
+  become: true
+  roles:
+    - linux
+    - elk
+    - zabbix_agent
+
+- hosts: mysqlmaster
+  become: true
+  roles:
+    - linux
+    - mysql
+    - zabbix_agent
+    - filebeat
+    - nfs_client
+
+- hosts: mysqlslave
+  become: true
+  roles:
+    - linux
+    - mysql
+    - zabbix_agent
+    - filebeat
+    - nfs_client
+
+- hosts: nginx
+  become: true
+  roles:
+    - linux
+    - nginx
+    - zabbix_agent
+    - filebeat
+    - nfs_client
+
+- hosts: zabbix
+  become: true
+  roles:
+    - linux
+    - zabbix
+    - filebeat

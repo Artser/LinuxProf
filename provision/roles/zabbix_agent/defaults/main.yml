@@ -1,0 +1,3 @@
+---
+zabbix_server_ip: "{{ hostvars['zabbix']['ansible_host'] }}"
+zabbix_hostname: "{{ inventory_hostname }}"

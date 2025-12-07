@@ -1,0 +1,61 @@
+---
+- name: Import packages
+  synchronize:
+    src: "{{ role_path }}/files/packages"
+    dest: /home/centos/
+    mode: push
+
+- name: Find all rpm files in packages folder
+  ansible.builtin.find:
+    paths: "/home/centos/packages"
+    patterns: "*.rpm"
+  register: rpm_files
+
+- name: Setting rpm_list
+  ansible.builtin.set_fact:
+    rpm_list: "{{ rpm_files.files | map(attribute='path') | list}}"
+
+- name: installing the rpm files
+  ansible.builtin.yum:
+    name: "{{ rpm_list }}"
+    state: present
+  notify:
+    - restart rpcbind
+
+- name: 'Create a directory'
+  file:
+    path: /mnt/share
+    state: directory
+
+- name: 'NFS Systemd config'  
+  copy: 
+    src: files/mnt-share.mount 
+    dest: /etc/systemd/system/mnt-share.mount
+
+- name: 'Copy Backup Scripts'  
+  copy:
+    src: files/{{ item }} 
+    dest: /home/centos/
+    mode: a+x
+  with_items:
+    ['base_backup.sh','base_restore.sh']   
+  when: inventory_hostname == 'mysqlmaster' or inventory_hostname == 'mysqlslave'
+
+- name: 'Copy Backup Scripts'  
+  copy:
+    src: files/{{ item }}
+    dest: /home/vagrant/
+    mode: a+x
+  with_items:
+    ['site_backup.sh','site_restore.sh']   
+  when: inventory_hostname == 'nginx'
+
+- name: 'Mount backup folder'
+  shell: |
+    sudo mount -t nfs -o tcp {{ hostvars['backup']['ansible_host'] }}:/var/nfs/ /mnt/share/
+  become: yes
+  notify:
+    - restart nfs  
+  ignore_errors: yes
+
+ 
